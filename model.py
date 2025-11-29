@@ -1,130 +1,285 @@
-# data analysis and wrangling
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot
-import pickle
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import OneHotEncoder
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder
+import pickle
+import warnings
+warnings.filterwarnings('ignore')
 
-# Load dataset
-df = pd.read_csv(r"C:\Users\Anand\Desktop\archive\WA_Fn-UseC_-HR-Employee-Attrition.csv")
+# Load the dataset
+print("Loading dataset...")
+df = pd.read_csv('data/employee data.csv')
+print(f"Dataset shape: {df.shape}")
+print(f"\nFirst few rows:")
+print(df.head())
 
-# drop the unnecessary columns
-df.drop(['EmployeeNumber', 'Over18', 'StandardHours', 'EmployeeCount'], axis=1, inplace=True)
+# Data preprocessing
+print("\n" + "="*50)
+print("PREPROCESSING DATA")
+print("="*50)
 
-# Change Factors to Numerics
-df['Attrition'] = df['Attrition'].apply(lambda x: 1 if x == "Yes" else 0)
-df['OverTime'] = df['OverTime'].apply(lambda x: 1 if x == "Yes" else 0)
+# Create a copy for processing
+df_processed = df.copy()
 
-# 'Environment Satisfaction', 'JobInvolvement', 'JobSatisfaction', 'RelationshipSatisfaction', 'WorklifeBalance' can
-# be clubbed into a single feature 'TotalSatisfaction'
-df['Total_Satisfaction'] = (df['EnvironmentSatisfaction'] +
-                            df['JobInvolvement'] +
-                            df['JobSatisfaction'] +
-                            df['RelationshipSatisfaction'] +
-                            df['WorkLifeBalance']) / 5
+# Calculate Total Satisfaction
+df_processed['Total_Satisfaction'] = (
+    df_processed['EnvironmentSatisfaction'] +
+    df_processed['JobInvolvement'] +
+    df_processed['JobSatisfaction'] +
+    df_processed['RelationshipSatisfaction'] +
+    df_processed['WorkLifeBalance']
+) / 5
 
-# Drop Columns
-df.drop(['EnvironmentSatisfaction','JobInvolvement','JobSatisfaction',
-         'RelationshipSatisfaction','WorkLifeBalance'], axis=1, inplace=True)
+# Drop original satisfaction columns
+df_processed.drop([
+    'EnvironmentSatisfaction', 
+    'JobInvolvement', 
+    'JobSatisfaction',
+    'RelationshipSatisfaction', 
+    'WorkLifeBalance'
+], axis=1, inplace=True)
 
 # Convert Total satisfaction into boolean
-df['Total_Satisfaction_bool'] = df['Total_Satisfaction'].apply(lambda x: 1 if x >= 2.8 else 0)
-df.drop('Total_Satisfaction', axis=1, inplace=True)
+df_processed['Total_Satisfaction_bool'] = df_processed['Total_Satisfaction'].apply(
+    lambda x: 1 if x >= 2.8 else 0
+)
+# df_processed.drop('(Total_Satisfaction)', axis=1, inplace=True)
+df_processed.drop('Total_Satisfaction', axis=1, inplace=True)
 
-# Age -> boolean
-df['Age_bool'] = df['Age'].apply(lambda x: 1 if x < 35 else 0)
-df.drop('Age', axis=1, inplace=True)
 
-# DailyRate -> boolean
-df['DailyRate_bool'] = df['DailyRate'].apply(lambda x: 1 if x < 800 else 0)
-df.drop('DailyRate', axis=1, inplace=True)
+# Feature engineering - create boolean features based on attrition patterns
+print("\nCreating engineered features...")
 
-# Department -> boolean
-df['Department_bool'] = df['Department'].apply(lambda x: 1 if x == 'Research & Development' else 0)
-df.drop('Department', axis=1, inplace=True)
+# Age: attrition is high for employees below 35
+df_processed['Age_bool'] = df_processed['Age'].apply(lambda x: 1 if x < 35 else 0)
+df_processed.drop('Age', axis=1, inplace=True)
 
-# DistanceFromHome -> boolean
-df['DistanceFromHome_bool'] = df['DistanceFromHome'].apply(lambda x: 1 if x > 10 else 0)
-df.drop('DistanceFromHome', axis=1, inplace=True)
+# Daily Rate: attrition is high if daily rate < 800
+df_processed['DailyRate_bool'] = df_processed['DailyRate'].apply(lambda x: 1 if x < 800 else 0)
+df_processed.drop('DailyRate', axis=1, inplace=True)
 
-# JobRole -> boolean
-df['JobRole_bool'] = df['JobRole'].apply(lambda x: 1 if x == 'Laboratory Technician' else 0)
-df.drop('JobRole', axis=1, inplace=True)
+# Department: R&D has higher attrition
+df_processed['Department_bool'] = df_processed['Department'].apply(
+    lambda x: 1 if x == 'Research & Development' else 0
+)
+df_processed.drop('Department', axis=1, inplace=True)
 
-# HourlyRate -> boolean
-df['HourlyRate_bool'] = df['HourlyRate'].apply(lambda x: 1 if x < 65 else 0)
-df.drop('HourlyRate', axis=1, inplace=True)
+# Distance From Home: attrition is high if distance > 10
+df_processed['DistanceFromHome_bool'] = df_processed['DistanceFromHome'].apply(
+    lambda x: 1 if x > 10 else 0
+)
+df_processed.drop('DistanceFromHome', axis=1, inplace=True)
 
-# MonthlyIncome -> boolean
-df['MonthlyIncome_bool'] = df['MonthlyIncome'].apply(lambda x: 1 if x < 4000 else 0)
-df.drop('MonthlyIncome', axis=1, inplace=True)
+# Job Role: Laboratory Technicians have higher attrition
+df_processed['JobRole_bool'] = df_processed['JobRole'].apply(
+    lambda x: 1 if x == 'Laboratory Technician' else 0
+)
+df_processed.drop('JobRole', axis=1, inplace=True)
 
-# NumCompaniesWorked -> boolean
-df['NumCompaniesWorked_bool'] = df['NumCompaniesWorked'].apply(lambda x: 1 if x > 3 else 0)
-df.drop('NumCompaniesWorked', axis=1, inplace=True)
+# Hourly Rate: attrition is high if hourly rate < 65
+df_processed['HourlyRate_bool'] = df_processed['HourlyRate'].apply(lambda x: 1 if x < 65 else 0)
+df_processed.drop('HourlyRate', axis=1, inplace=True)
 
-# TotalWorkingYears -> boolean
-df['TotalWorkingYears_bool'] = df['TotalWorkingYears'].apply(lambda x: 1 if x < 8 else 0)
-df.drop('TotalWorkingYears', axis=1, inplace=True)
+# Monthly Income: attrition is high if income < 4000
+df_processed['MonthlyIncome_bool'] = df_processed['MonthlyIncome'].apply(
+    lambda x: 1 if x < 4000 else 0
+)
+df_processed.drop('MonthlyIncome', axis=1, inplace=True)
 
-# YearsAtCompany -> boolean
-df['YearsAtCompany_bool'] = df['YearsAtCompany'].apply(lambda x: 1 if x < 3 else 0)
-df.drop('YearsAtCompany', axis=1, inplace=True)
+# Num Companies Worked: attrition is high if > 3
+df_processed['NumCompaniesWorked_bool'] = df_processed['NumCompaniesWorked'].apply(
+    lambda x: 1 if x > 3 else 0
+)
+df_processed.drop('NumCompaniesWorked', axis=1, inplace=True)
 
-# YearsInCurrentRole -> boolean
-df['YearsInCurrentRole_bool'] = df['YearsInCurrentRole'].apply(lambda x: 1 if x < 3 else 0)
-df.drop('YearsInCurrentRole', axis=1, inplace=True)
+# Total Working Years: attrition is high if < 8
+df_processed['TotalWorkingYears_bool'] = df_processed['TotalWorkingYears'].apply(
+    lambda x: 1 if x < 8 else 0
+)
+df_processed.drop('TotalWorkingYears', axis=1, inplace=True)
 
-# YearsSinceLastPromotion -> boolean
-df['YearsSinceLastPromotion_bool'] = df['YearsSinceLastPromotion'].apply(lambda x: 1 if x < 1 else 0)
-df.drop('YearsSinceLastPromotion', axis=1, inplace=True)
+# Years At Company: attrition is high if < 3
+df_processed['YearsAtCompany_bool'] = df_processed['YearsAtCompany'].apply(
+    lambda x: 1 if x < 3 else 0
+)
+df_processed.drop('YearsAtCompany', axis=1, inplace=True)
 
-# YearsWithCurrManager -> boolean
-df['YearsWithCurrManager_bool'] = df['YearsWithCurrManager'].apply(lambda x: 1 if x < 1 else 0)
-df.drop('YearsWithCurrManager', axis=1, inplace=True)
+# Years In Current Role: attrition is high if < 3
+df_processed['YearsInCurrentRole_bool'] = df_processed['YearsInCurrentRole'].apply(
+    lambda x: 1 if x < 3 else 0
+)
+df_processed.drop('YearsInCurrentRole', axis=1, inplace=True)
 
-# Gender -> numeric
-df['Gender'] = df['Gender'].apply(lambda x: 1 if x == 'Female' else 0)
+# Years Since Last Promotion: attrition is high if < 1
+df_processed['YearsSinceLastPromotion_bool'] = df_processed['YearsSinceLastPromotion'].apply(
+    lambda x: 1 if x < 1 else 0
+)
+df_processed.drop('YearsSinceLastPromotion', axis=1, inplace=True)
 
-# Drop more unused columns
-df.drop('MonthlyRate', axis=1, inplace=True)
-df.drop('PercentSalaryHike', axis=1, inplace=True)
+# Years With Current Manager: attrition is high if < 1
+df_processed['YearsWithCurrManager_bool'] = df_processed['YearsWithCurrManager'].apply(
+    lambda x: 1 if x < 1 else 0
+)
+df_processed.drop('YearsWithCurrManager', axis=1, inplace=True)
 
-# Convert to category
-convert_category = ['BusinessTravel','Education','EducationField','MaritalStatus',
-                    'StockOptionLevel','OverTime','Gender','TrainingTimesLastYear']
-for col in convert_category:
-    df[col] = df[col].astype('category')
+# Drop columns that won't be useful for prediction
+columns_to_drop = ['EmployeeCount', 'EmployeeNumber', 'StandardHours', 'Over18']
+for col in columns_to_drop:
+    if col in df_processed.columns:
+        df_processed.drop(col, axis=1, inplace=True)
 
-# Separate categorical and numerical
-X_categorical = df.select_dtypes(include=['category'])
-X_numerical = df.select_dtypes(include=['int64'])
-X_numerical.drop('Attrition', axis=1, inplace=True)
+# Encode categorical variables
+print("\nEncoding categorical variables...")
 
-y = df['Attrition']
+# One-hot encoding for categorical features
+df_processed = pd.get_dummies(df_processed, columns=[
+    'BusinessTravel', 
+    'EducationField', 
+    'Gender', 
+    'MaritalStatus', 
+    'OverTime'
+])
 
-# One Hot Encoding
-onehotencoder = OneHotEncoder()
-X_categorical = onehotencoder.fit_transform(X_categorical).toarray()
-X_categorical = pd.DataFrame(X_categorical)
+# One-hot encoding for ordinal features
+df_processed = pd.get_dummies(df_processed, columns=[
+    'Education',
+    'JobLevel',
+    'StockOptionLevel',
+    'TrainingTimesLastYear',
+    'PerformanceRating'
+])
 
-# Combine categorical + numerical
-X_all = pd.concat([X_categorical, X_numerical], axis=1)
+# Encode target variable
+print("\nEncoding target variable...")
+le = LabelEncoder()
+df_processed['Attrition'] = le.fit_transform(df_processed['Attrition'])
 
-# ✅ Fix mixed column names
-X_all.columns = X_all.columns.astype(str)
+print(f"\nProcessed dataset shape: {df_processed.shape}")
+print(f"Features: {df_processed.columns.tolist()}")
 
-# Split Test and Train Data
-X_train, X_test, y_train, y_test = train_test_split(X_all, y, test_size=0.20)
+# Separate features and target
+X = df_processed.drop('Attrition', axis=1)
+y = df_processed['Attrition']
 
-# Train model
-regressor = LogisticRegression()
-regressor.fit(X_train, y_train)
+print(f"\nTarget distribution:")
+print(y.value_counts())
+print(f"Attrition rate: {(y.sum() / len(y)) * 100:.2f}%")
 
-# Save model
-pickle.dump(regressor, open('model.pkl','wb'))
+# Split the data
+print("\n" + "="*50)
+print("SPLITTING DATA")
+print("="*50)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
 
-# Load model to verify
-model = pickle.load(open('model.pkl','rb'))
+print(f"Training set size: {X_train.shape[0]}")
+print(f"Test set size: {X_test.shape[0]}")
+
+# Train the model
+print("\n" + "="*50)
+print("TRAINING MODEL")
+print("="*50)
+
+model = LogisticRegression(max_iter=1000, random_state=42, solver='lbfgs')
+print("Training Logistic Regression model...")
+model.fit(X_train, y_train)
+print("Training completed!")
+
+# Make predictions
+print("\n" + "="*50)
+print("EVALUATING MODEL")
+print("="*50)
+
+y_pred_train = model.predict(X_train)
+y_pred_test = model.predict(X_test)
+
+train_accuracy = accuracy_score(y_train, y_pred_train)
+test_accuracy = accuracy_score(y_test, y_pred_test)
+
+print(f"\nTraining Accuracy: {train_accuracy:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f}")
+
+print("\nClassification Report (Test Set):")
+print(classification_report(y_test, y_pred_test, target_names=['Stay', 'Leave']))
+
+# Confusion Matrix
+print("\nConfusion Matrix (Test Set):")
+cm = confusion_matrix(y_test, y_pred_test)
+print(cm)
+
+# Visualize confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=['Stay', 'Leave'], 
+            yticklabels=['Stay', 'Leave'])
+plt.title('Confusion Matrix')
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.tight_layout()
+plt.savefig('confusion_matrix.png', dpi=300, bbox_inches='tight')
+print("\nConfusion matrix saved as 'confusion_matrix.png'")
+
+# Feature importance (coefficients)
+feature_importance = pd.DataFrame({
+    'feature': X.columns,
+    'coefficient': model.coef_[0]
+})
+feature_importance['abs_coefficient'] = abs(feature_importance['coefficient'])
+feature_importance = feature_importance.sort_values('abs_coefficient', ascending=False)
+
+print("\nTop 15 Most Important Features:")
+print(feature_importance.head(15)[['feature', 'coefficient']])
+
+# Plot feature importance
+plt.figure(figsize=(10, 8))
+top_features = feature_importance.head(15)
+plt.barh(range(len(top_features)), top_features['coefficient'])
+plt.yticks(range(len(top_features)), top_features['feature'])
+plt.xlabel('Coefficient Value')
+plt.title('Top 15 Feature Importance (Logistic Regression Coefficients)')
+plt.tight_layout()
+plt.savefig('feature_importance.png', dpi=300, bbox_inches='tight')
+print("\nFeature importance plot saved as 'feature_importance.png'")
+
+# Save the model
+print("\n" + "="*50)
+print("SAVING MODEL")
+print("="*50)
+
+with open('model.pkl', 'wb') as file:
+    pickle.dump(model, file)
+
+print("Model saved as 'model.pkl'")
+
+# Save feature names for reference
+with open('feature_names.pkl', 'wb') as file:
+    pickle.dump(X.columns.tolist(), file)
+
+print("Feature names saved as 'feature_names.pkl'")
+
+# Test the saved model
+print("\n" + "="*50)
+print("TESTING SAVED MODEL")
+print("="*50)
+
+with open('model.pkl', 'rb') as file:
+    loaded_model = pickle.load(file)
+
+test_prediction = loaded_model.predict(X_test[:5])
+print(f"\nTest predictions on first 5 samples: {test_prediction}")
+print(f"Actual values: {y_test[:5].values}")
+
+print("\n" + "="*50)
+print("MODEL TRAINING COMPLETED SUCCESSFULLY!")
+print("="*50)
+print("\nFiles generated:")
+print("1. model.pkl - Trained model")
+print("2. feature_names.pkl - Feature names for reference")
+print("3. confusion_matrix.png - Confusion matrix visualization")
+print("4. feature_importance.png - Feature importance plot")
+print("\nYou can now run the Flask application with: python app.py")
